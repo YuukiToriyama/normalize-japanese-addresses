@@ -2,8 +2,9 @@
 
 import { normalize as normalizerForNode } from '../src/main-node'
 import { normalize as normalizerForBrowser } from '../src/main-browser'
+import { normalize as normalizerForES } from '../src/main-es'
 
-const cases: [runtime: string, normalizer: typeof normalizerForNode | typeof normalizerForBrowser][] = [['node', normalizerForNode], ['browser', normalizerForBrowser]]
+const cases: [runtime: string, normalizer: typeof normalizerForNode | typeof normalizerForBrowser | typeof normalizerForES][] = [['node', normalizerForNode], ['browser', normalizerForBrowser], ['es', normalizerForES]]
 
 for (const [runtime, normalize] of cases) {
   describe(`tests for ${runtime} entry point`, () => {
@@ -49,11 +50,6 @@ for (const [runtime, normalize] of cases) {
 
     test('和歌山県東牟婁郡串本町串本千二百三四', async () => {
       const res = await normalize('和歌山県東牟婁郡串本町串本千二百三四')
-      expect(res).toStrictEqual({"pref": "和歌山県", "city": "東牟婁郡串本町", "town": "串本", "addr": "1234", "lat": 33.470358, "lng": 135.779952, "level": 3})
-    })
-
-    test('和歌山県東牟婁郡串本町串本千二百三十四', async () => {
-      const res = await normalize('和歌山県東牟婁郡串本町串本千二百三十四')
       expect(res).toStrictEqual({"pref": "和歌山県", "city": "東牟婁郡串本町", "town": "串本", "addr": "1234", "lat": 33.470358, "lng": 135.779952, "level": 3})
     })
 
@@ -279,11 +275,6 @@ for (const [runtime, normalize] of cases) {
       expect(res).toStrictEqual({"pref": "大阪府", "city": "大阪市此花区", "town": "西九条三丁目", "addr": "2-16", "lat": 34.684074, "lng": 135.467031, "level": 3})
     })
 
-    test('大阪府大阪市此花区西九条3-2-16', async () => {
-      const res = await normalize('大阪府大阪市此花区西九条3-2-16')
-      expect(res).toStrictEqual({"pref": "大阪府", "city": "大阪市此花区", "town": "西九条三丁目", "addr": "2-16", "lat": 34.684074, "lng": 135.467031, "level": 3})
-    })
-
     test('千葉県鎌ケ谷市中佐津間２丁目１５－１４－９', async () => {
       const res = await normalize('千葉県鎌ケ谷市中佐津間２丁目１５－１４－９')
       expect(res).toStrictEqual({"pref": "千葉県", "city": "鎌ヶ谷市", "town": "中佐津間二丁目", "addr": "15-14-9", "lat": 35.800253, "lng": 140.002133, "level": 3})
@@ -382,11 +373,6 @@ for (const [runtime, normalize] of cases) {
     test('埼玉県八潮市大字大瀬１丁目１－１', async () => {
       const res = await normalize('埼玉県八潮市大字大瀬１丁目１－１')
       expect(res).toStrictEqual({"pref": "埼玉県", "city": "八潮市", "town": "大瀬一丁目", "addr": "1-1", "lat": 35.808825, "lng": 139.84291, "level": 3})
-    })
-
-    test('岡山県笠岡市大宜1249－1', async () => {
-      const res = await normalize('岡山県笠岡市大宜1249－1')
-      expect(res).toStrictEqual({"pref": "岡山県", "city": "笠岡市", "town": "大宜", "addr": "1249-1", "lat": 34.506729, "lng": 133.473295, "level": 3})
     })
 
     test('岡山県笠岡市大宜1249－1', async () => {
@@ -760,7 +746,7 @@ for (const [runtime, normalize] of cases) {
     })
 
     test('京都府京都市中京区河原町二条下ル一之舟入町537-50（船と舟のゆらぎ）', async () => {
-      const res = await normalize('京都府京都市中京区河原町二条下ル一之船入町537-50')
+      const res = await normalize('京都府京都市中京区河原町二条下ル一之舟入町537-50')
       expect(res).toStrictEqual({"pref": "京都府", "city": "京都市中京区", "town": "一之船入町", "addr": "537-50", "level": 3, "lat": 35.01217, "lng": 135.769483})
     })
 
@@ -863,6 +849,61 @@ for (const [runtime, normalize] of cases) {
     test('愛知県名古屋市瑞穂区弥富町', async () => {
       const res = await normalize('愛知県名古屋市瑞穂区弥富町')
       expect(res).toStrictEqual({"pref": "愛知県", "city": "名古屋市瑞穂区", "town": "彌富町", "addr": "", "level": 3, "lat": 35.132011, "lng": 136.955457 })
+    })
+
+    test('東京都千代田区永田町1-2-3-レジデンス億万101 (号の後にハイフンで漢数字末尾に含んだマンション名が続き、号室が数値の場合)', async () => {
+      const res = await normalize('東京都千代田区永田町1-2-3-レジデンス億万101')
+      expect(res).toStrictEqual({"pref": "東京都", "city": "千代田区", "town": "永田町一丁目", "addr": "2-3-レジデンス億万101", "lat": 35.675895, "lng": 139.746306, "level": 3})
+    })
+
+    test('東京都千代田区三番町２番地４三番町ＫＳビル１０階(番地と建物名が混ざり、「番」が消えることがないこと)', async () => {
+      const res = await normalize('東京都千代田区三番町２番地４三番町ＫＳビル１０階')
+      expect(res).toStrictEqual({"pref": "東京都", "city": "千代田区", "town": "三番町", "addr": "2-4三番町KSビル10階", "lat": 35.690557, "lng": 139.743591, "level": 3})
+    })
+
+    test('東京都千代田区神田美土代町９番地７千代田２１ビル７階(「7千代田」が「7000代田」にならないこと)', async () => {
+      const res = await normalize('東京都千代田区神田美土代町９番地７千代田２１ビル７階')
+      expect(res).toStrictEqual({
+        pref: '東京都',
+        city: '千代田区',
+        town: '神田美土代町',
+        addr: '9-7千代田21ビル7階',
+        lat: 35.693283,
+        lng: 139.765581,
+        level: 3
+      })
+    })
+
+    test('神奈川県川崎市川崎区駅前本町１５番５十五番館ビル(「５十五番館ビル」が「番」が消えずに「5十五番館ビル」となる)', async () => {
+      const res = await normalize('神奈川県川崎市川崎区駅前本町１５番５十五番館ビル')
+      expect(res).toStrictEqual({"pref": "神奈川県", "city": "川崎市川崎区", "town": "駅前本町", "addr": "15-5十五番館ビル", "lat": 35.532434, "lng": 139.6996, "level": 3})
+    })
+
+    describe('途中にスペースを含むケース', () => {
+      // https://github.com/geolonia/normalize-japanese-addresses/issues/180
+      test('京都府京都市　下京区上之町999', async () => {
+        const res = await normalize('京都府京都市 下京区上之町999')
+        expect(res.pref).toEqual('京都府')
+        expect(res.city).toEqual('京都市下京区')
+        expect(res.town).toEqual('上之町')
+        expect(res.addr).toEqual('999')
+      })
+
+      test('宮城県仙台市 若林区土樋999', async () => {
+        const res = await normalize('宮城県仙台市 若林区土樋999')
+        expect(res.pref).toEqual('宮城県')
+        expect(res.city).toEqual('仙台市若林区')
+        expect(res.town).toEqual('土樋')
+        expect(res.addr).toEqual('999')
+      })
+
+      test('青森県上北郡 横浜町字三保野888', async () => {
+        const res = await normalize('青森県上北郡 横浜町字三保野888')
+        expect(res.pref).toEqual('青森県')
+        expect(res.city).toEqual('上北郡横浜町')
+        expect(res.town).toEqual('字三保野')
+        expect(res.addr).toEqual('888')
+      })
     })
 
     describe('町丁目内の文字列の「町」の省略に関連するケース', () => {
@@ -1052,6 +1093,70 @@ for (const [runtime, normalize] of cases) {
       const res = await normalize('大分県大分市田中町3丁目1-12')
       expect(res.lat).toEqual(null)
       expect(res.lng).toEqual(null)
+    })
+
+    test('町丁目名が判別できなかった場合、残った住所には漢数字->数字などの変換処理を施さない', async () => {
+      const res = await normalize('北海道滝川市一の坂町西')
+      expect(res.town).toEqual('')
+      expect(res.addr).toEqual('一の坂町西')
+    })
+
+    test('丁目の数字だけあるときは正しく「一丁目」まで補充できる', async () => {
+      const res = await normalize('東京都文京区小石川1')
+      expect(res.town).toEqual('小石川一丁目')
+      expect(res.addr).toEqual('')
+    })
+
+    test('丁目の数字だけあるときは正しく「一丁目」まで補充できる（以降も対応）', async () => {
+      const res = await normalize('東京都文京区小石川1ビル名')
+      expect(res.town).toEqual('小石川一丁目')
+      expect(res.addr).toEqual('ビル名')
+    })
+
+    test('旧漢字対応 (亞 -> 亜)', async () => {
+      const address = '宮城県大崎市古川大崎東亜'
+      const res = await normalize(address)
+      expect(res.addr).toEqual('東亜')
+      expect(res.level).toEqual(3)
+    })
+
+    test('旧漢字対応 (澤 -> 沢)', async () => {
+      const address = '東京都西多摩郡奥多摩町海澤'
+      const res = await normalize(address)
+      expect(res.town).toEqual('海澤')
+      expect(res.level).toEqual(3)
+    })
+
+    test('旧漢字対応 (麩 -> 麸)', async () => {
+      const address = '愛知県津島市池麩町'
+      const res = await normalize(address)
+      expect(res.town).toEqual('池麸町')
+      expect(res.level).toEqual(3)
+    })
+
+    test('柿碕町|柿さき町', async () => {
+      const address = '愛知県安城市柿碕町'
+      const res = await normalize(address)
+      expect(res.town).toEqual('柿さき町')
+      expect(res.level).toEqual(3)
+    })
+
+    describe('漢数字の小字のケース', () => {
+      test('愛知県豊田市西丹波町三五十', async () => {
+        const address = '愛知県豊田市西丹波町三五十'
+        const res = await normalize(address)
+        expect(res.town).toEqual('西丹波町')
+        expect(res.addr).toEqual("三五十")
+        expect(res.level).toEqual(3)
+      })
+
+      test('広島県府中市栗柄町名字八五十2459 小字以降は現在のところ無視される', async () => {
+        const address = '広島県府中市栗柄町名字八五十2459'
+        const res = await normalize(address)
+        expect(res.town).toEqual('栗柄町')
+        expect(res.addr).toEqual("名字八五十2459")
+        expect(res.level).toEqual(3)
+      })
     })
   })
 }

@@ -5,7 +5,7 @@ import { currentConfig } from '../config'
 import { __internals } from '../normalize'
 import { findKanjiNumbers } from '@geolonia/japanese-numeral'
 
-type PrefectureList = { [key: string]: string[] }
+export type PrefectureList = { [key: string]: string[] }
 interface SingleTown {
   town: string
   originalTown?: string
@@ -13,7 +13,26 @@ interface SingleTown {
   lat: string
   lng: string
 }
-type TownList = SingleTown[]
+export type TownList = SingleTown[]
+interface SingleAddr {
+  addr: string
+  lat: string | null
+  lng: string | null
+}
+export type AddrList = SingleAddr[]
+interface GaikuListItem {
+  gaiku: string
+  lat: string
+  lng: string
+}
+
+interface SingleResidential {
+  gaiku: string
+  jyukyo: string
+  lat: string
+  lng: string
+}
+type ResidentialList = SingleResidential[]
 
 const cachedTownRegexes = new LRU<string, [SingleTown, string][]>({
   max: currentConfig.townCacheSize,
@@ -24,6 +43,9 @@ let cachedPrefecturePatterns: [string, string][] | undefined = undefined
 const cachedCityPatterns: { [key: string]: [string, string][] } = {}
 let cachedPrefectures: PrefectureList | undefined = undefined
 const cachedTowns: { [key: string]: TownList } = {}
+const cachedGaikuListItem: { [key: string]: GaikuListItem[] } = {}
+const cachedResidentials: { [key: string]: ResidentialList } = {}
+const cachedAddrs: { [key: string]: AddrList } = {} // TODO: use LRU
 let cachedSameNamedPrefectureCityRegexPatterns:
   | [string, string][]
   | undefined = undefined
@@ -33,8 +55,8 @@ export const getPrefectures = async () => {
     return cachedPrefectures
   }
 
-  const resp = await __internals.fetch('.json') // ja.json
-  const data = (await resp.json()) as PrefectureList
+  const prefsResp = await __internals.fetch('.json', { level: 1 }) // ja.json
+  const data = (await prefsResp.json()) as PrefectureList
   return cachePrefectures(data)
 }
 
@@ -86,11 +108,111 @@ export const getTowns = async (pref: string, city: string) => {
     return cachedTown
   }
 
-  const responseTownsResp = await __internals.fetch(
+  const townsResp = await __internals.fetch(
     ['', encodeURI(pref), encodeURI(city) + '.json'].join('/'),
+    { level: 3, pref, city },
   )
-  const towns = (await responseTownsResp.json()) as TownList
+  const towns = (await townsResp.json()) as TownList
   return (cachedTowns[cacheKey] = towns)
+}
+
+export const getGaikuList = async (
+  pref: string,
+  city: string,
+  town: string,
+) => {
+  if (currentConfig.interfaceVersion > 1) {
+    throw new Error(
+      `Invalid config.interfaceVersion: ${currentConfig.interfaceVersion}'}. Please set config.interfaceVersion to 1.`,
+    )
+  }
+
+  const cacheKey = `${pref}-${city}-${town}-v${currentConfig.interfaceVersion}`
+  const cache = cachedGaikuListItem[cacheKey]
+  if (typeof cache !== 'undefined') {
+    return cache
+  }
+  const gaikuResp = await __internals.fetch(
+    ['', encodeURI(pref), encodeURI(city), encodeURI(town + '.json')].join('/'),
+  )
+  let gaikuListItem: GaikuListItem[]
+  try {
+    gaikuListItem = (await gaikuResp.json()) as GaikuListItem[]
+  } catch {
+    gaikuListItem = []
+  }
+  return (cachedGaikuListItem[cacheKey] = gaikuListItem)
+}
+
+export const getResidentials = async (
+  pref: string,
+  city: string,
+  town: string,
+) => {
+  if (currentConfig.interfaceVersion > 1) {
+    throw new Error(
+      `Invalid config.interfaceVersion: ${currentConfig.interfaceVersion}'}. Please set config.interfaceVersion to 1.`,
+    )
+  }
+
+  const cacheKey = `${pref}-${city}-${town}-v${currentConfig.interfaceVersion}`
+  const cache = cachedResidentials[cacheKey]
+  if (typeof cache !== 'undefined') {
+    return cache
+  }
+
+  const residentialsResp = await __internals.fetch(
+    [
+      '',
+      encodeURI(pref),
+      encodeURI(city),
+      encodeURI(town),
+      encodeURI('住居表示.json'),
+    ].join('/'),
+  )
+  let residentials: ResidentialList
+  try {
+    residentials = (await residentialsResp.json()) as ResidentialList
+  } catch {
+    residentials = []
+  }
+
+  residentials.sort(
+    (res1, res2) =>
+      `${res2.gaiku}-${res2.jyukyo}`.length -
+      `${res1.gaiku}-${res1.jyukyo}`.length,
+  )
+  return (cachedResidentials[cacheKey] = residentials)
+}
+
+export const getAddrs = async (pref: string, city: string, town: string) => {
+  if (currentConfig.interfaceVersion < 2) {
+    throw new Error(
+      `Invalid config.interfaceVersion: ${currentConfig.interfaceVersion}'}. Please set config.interfaceVersion to 2 or higher`,
+    )
+  }
+
+  const cacheKey = `${pref}-${city}-${town}-v${currentConfig.interfaceVersion}`
+  const cache = cachedAddrs[cacheKey]
+  if (typeof cache !== 'undefined') {
+    return cache
+  }
+
+  const addrsResp = await __internals.fetch(
+    ['', encodeURI(pref), encodeURI(city), encodeURI(town) + '.json'].join('/'),
+    { level: 8, pref, city, town },
+  )
+  let addrs: AddrList
+  try {
+    addrs = (await addrsResp.json()) as AddrList
+  } catch {
+    addrs = []
+  }
+
+  // 文字数が多い順に並び替えします。
+  // 長い順に並び替えしないと、短い住所がマッチしてしまう。
+  addrs.sort((res1, res2) => res2.addr.length - res1.addr.length)
+  return (cachedAddrs[cacheKey] = addrs)
 }
 
 // 十六町 のように漢数字と町が連結しているか
@@ -187,14 +309,28 @@ export const getTownRegexPatterns = async (pref: string, city: string) => {
             const _pattern = `(${patterns.join(
               '|',
             )})((丁|町)目?|番(町|丁)|条|軒|線|の町?|地割|号|[-－﹣−‐⁃‑‒–—﹘―⎯⏤ーｰ─━])`
-
             return _pattern // デバッグのときにめんどくさいので変数に入れる。
           },
         ),
     )
-
     return [town, pattern]
   }) as [SingleTown, string][]
+
+  // X丁目の丁目なしの数字だけ許容するため、最後に数字だけ追加していく
+  for (const town of towns) {
+    const chomeMatch = town.town.match(
+      /([^一二三四五六七八九十]+)([一二三四五六七八九十]+)(丁目?)/,
+    )
+    if (!chomeMatch) {
+      continue
+    }
+    const chomeNamePart = chomeMatch[1]
+    const chomeNum = chomeMatch[2]
+    const pattern = toRegexPattern(
+      `^${chomeNamePart}(${chomeNum}|${kan2num(chomeNum)})`,
+    )
+    patterns.push([town, pattern])
+  }
 
   cachedTownRegexes.set(`${pref}-${city}`, patterns)
   return patterns
